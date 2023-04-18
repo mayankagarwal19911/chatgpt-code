@@ -1,0 +1,105 @@
+# bootstrap config connector
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicy
+metadata:
+  name: iampolicy-workload-identity-configconnector
+spec:
+  resourceRef:
+    apiVersion: iam.cnrm.cloud.google.com/v1beta1
+    kind: IAMServiceAccount
+    name:<project-sa>
+  bindings:
+  - role: roles/iam.workloadIdentityUser
+    members:
+    - serviceAccount:serviceAccount:<project_id>.svc.id.goog[cnrm-system/cnrm-controller-manager]
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    cnrm.cloud.google.com/project-id: <project_id>
+  name: ns-config-connector
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ksa
+  namespace: ns-config-connector
+
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  name: test-config-connector
+  annotations:
+    cnrm.cloud.google.com/project-id: <project_id>
+    cnrm.cloud.google.com/deletion-policy: abandon
+spec:
+  displayName: gsato-test-config-connector
+---
+
+# GSA-KSA
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicy
+metadata:
+  name: iampolicy-workload-identity-ns
+spec:
+  resourceRef:
+    apiVersion: iam.cnrm.cloud.google.com/v1beta1
+    kind: IAMServiceAccount
+    name: <project-sa>
+  bindings:
+  - role: roles/iam.workloadIdentityUser
+    members:
+    - serviceAccount:<project_id>.svc.id.goog[ns-config-connector/ksa]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: ns-config-connector
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+# This role binding allows "jane" to read pods in the "default" namespace.
+# You need to already have a Role named "pod-reader" in that namespace.
+kind: RoleBinding
+metadata:
+  name: read-pods
+  namespace: ns-config-connector
+subjects:
+# You can specify more than one "subject"
+- kind: User
+  name: 
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  # "roleRef" specifies the binding to a Role / ClusterRole
+  kind: Role #this must be Role or ClusterRole
+  name: pod-reader # this must match the name of the Role or ClusterRole you wish to bind to
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicy
+metadata:
+  name: iampolicy
+  annotations:
+    cnrm.cloud.google.com/deletion-policy: abandon
+spec:
+  resourceRef:
+    kind: ContainerCluster
+    name: allow-group-cluster-access
+  bindings:
+  - members:
+    - group:
+    role: roles/container.viewer
+  - members:
+    - group:
+    role: roles/container.clusterViewer
